@@ -209,6 +209,10 @@ class GuardianAngelSystem:
         """Start the system."""
         logger.info("Starting Guardian Angel system...")
 
+        # Reset stop event and clear old threads
+        self.stop_event.clear()
+        self.processing_threads = []
+
         # Start API server if enabled (only if not already running)
         dashboard_config = self.config.get("dashboard", {})
         if dashboard_config.get("enabled", False) and self.api_server is None:

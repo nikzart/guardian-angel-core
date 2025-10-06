@@ -179,15 +179,9 @@ async def websocket_endpoint(websocket: WebSocket, auth_manager=None):
             username = query_params.get("username")
             password = query_params.get("password")
 
-            # DEBUG LOGGING
-            logger.info(f"WebSocket auth attempt - Received: username='{username}', password='{password}'")
-            logger.info(f"WebSocket auth attempt - Expected: username='{auth_manager.username}', password='{auth_manager.password}'")
-            logger.info(f"WebSocket auth attempt - Username match: {username == auth_manager.username}")
-            logger.info(f"WebSocket auth attempt - Password match: {password == auth_manager.password}")
-
             if username == auth_manager.username and password == auth_manager.password:
                 authenticated = True
-                logger.info("WebSocket authentication successful via query params")
+                logger.info("WebSocket authentication successful")
 
         if not authenticated:
             logger.warning(f"WebSocket connection rejected: authentication failed (authenticated={authenticated})")
