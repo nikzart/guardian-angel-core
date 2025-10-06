@@ -71,3 +71,6 @@ htmlcov/
 # System
 .env
 .env.local
+
+# Local documentation
+CLAUDE.md
