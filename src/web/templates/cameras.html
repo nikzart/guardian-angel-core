@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Cameras - Guardian Angel{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-camera-video"></i> Camera Management</h1>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCameraModal">
+            <i class="bi bi-plus-circle"></i> Add Camera
+        </button>
+    </div>
+</div>
+
+<div class="camera-grid" id="cameraGrid">
+    <div class="text-center py-5">
+        <i class="bi bi-hourglass-split"></i> Loading cameras...
+    </div>
+</div>
+
+<!-- Add Camera Modal -->
+<div class="modal fade" id="addCameraModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Camera</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Camera ID</label>
+                    <input type="text" class="form-control" id="newCameraId" placeholder="camera_01">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Camera Name</label>
+                    <input type="text" class="form-control" id="newCameraName" placeholder="Main Entrance">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Source (RTSP URL or video file)</label>
+                    <input type="text" class="form-control" id="newCameraSource" placeholder="rtsp://...">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Target FPS</label>
+                    <input type="number" class="form-control" id="newCameraFps" value="30" min="1" max="60">
+                </div>
+                <div class="mb-3">
+                    <button class="btn btn-secondary btn-sm" onclick="testCameraConnection()">
+                        <i class="bi bi-check-circle"></i> Test Connection
+                    </button>
+                    <span id="testResult" class="ms-2"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addCamera()">Add Camera</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadCameras() {
+    try {
+        const cameras = await apiCall('/api/cameras/');
+        const grid = document.getElementById('cameraGrid');
+        grid.innerHTML = '';
+
+        for (const camera of cameras) {
+            const status = await apiCall(`/api/cameras/${camera.camera_id}/status`);
+            grid.innerHTML += `
+                <div class="card camera-card">
+                    <div class="camera-preview">
+                        <img src="/api/cameras/${camera.camera_id}/preview"
+                             onerror="this.style.display='none'"
+                             alt="${camera.name}">
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            ${status.is_running ? '<i class="bi bi-circle-fill text-success"></i>' : '<i class="bi bi-circle-fill text-danger"></i>'}
+                            ${camera.name}
+                        </h5>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                ${camera.camera_id}<br>
+                                ${status.frame_count} frames | ${status.fps} FPS
+                            </small>
+                        </p>
+                        <button class="btn btn-sm btn-danger" onclick="deleteCamera('${camera.camera_id}')">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (cameras.length === 0) {
+            grid.innerHTML = '<div class="text-center py-5"><i class="bi bi-camera-video-off"></i> No cameras configured</div>';
+        }
+    } catch (error) {
+        console.error('Failed to load cameras:', error);
+    }
+}
+
+async function testCameraConnection() {
+    const source = document.getElementById('newCameraSource').value;
+    const resultEl = document.getElementById('testResult');
+    resultEl.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Testing...';
+
+    try {
+        const result = await apiCall('/api/cameras/test?source=' + encodeURIComponent(source), { method: 'POST' });
+
+        if (result.success) {
+            resultEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Connection successful</span>';
+        } else {
+            resultEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + result.message + '</span>';
+        }
+    } catch (error) {
+        resultEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> Test failed</span>';
+    }
+}
+
+async function addCamera() {
+    const camera = {
+        camera_id: document.getElementById('newCameraId').value,
+        name: document.getElementById('newCameraName').value,
+        source: document.getElementById('newCameraSource').value,
+        enabled: true,
+        target_fps: parseInt(document.getElementById('newCameraFps').value)
+    };
+
+    try {
+        await apiCall('/api/cameras/', {
+            method: 'POST',
+            body: JSON.stringify(camera)
+        });
+
+        showToast('Camera added successfully', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('addCameraModal')).hide();
+        loadCameras();
+    } catch (error) {
+        showToast('Failed to add camera', 'error');
+    }
+}
+
+async function deleteCamera(cameraId) {
+    if (!confirm(`Are you sure you want to delete camera ${cameraId}?`)) return;
+
+    try {
+        await apiCall(`/api/cameras/${cameraId}`, { method: 'DELETE' });
+        showToast('Camera deleted', 'success');
+        loadCameras();
+    } catch (error) {
+        showToast('Failed to delete camera', 'error');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadCameras();
+    setInterval(loadCameras, 30000);
+});
+</script>
+{% endblock %}

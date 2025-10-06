@@ -1,0 +1,122 @@
+# Guardian Angel Core System Configuration
+
+system:
+  name: "Guardian Angel School Safety System"
+  version: "1.0.0"
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# Camera configurations
+cameras:
+  - camera_id: "camera_01"
+    name: "Main Entrance"
+    source: "rtsp://admin:password@192.168.1.100:554/stream"  # Or video file path, or webcam index (0)
+    enabled: true
+    target_fps: 30
+
+  - camera_id: "camera_02"
+    name: "Playground"
+    source: "rtsp://admin:password@192.168.1.101:554/stream"
+    enabled: true
+    target_fps: 30
+
+  - camera_id: "camera_03"
+    name: "Corridor Level 2"
+    source: "rtsp://admin:password@192.168.1.102:554/stream"
+    enabled: true
+    target_fps: 25
+
+# Tracking configuration
+tracking:
+  max_age: 30  # Maximum frames to keep track without updates
+  min_hits: 3  # Minimum hits to confirm a track
+  iou_threshold: 0.3  # IOU threshold for matching
+
+# Pose model configuration
+pose_model:
+  model_path: "yolov8n-pose.pt"  # Path to model weights (or model name to download)
+  device: "cuda"  # cuda, cpu, or mps
+  conf_threshold: 0.5
+  iou_threshold: 0.45
+
+# Fall Detection Configuration
+fall_detection:
+  enabled: true
+  confidence_threshold: 0.6
+  alert_cooldown_seconds: 5
+  vertical_threshold: 0.6  # How low head must be (0-1, higher = lower in frame)
+  angle_threshold: 60  # Degrees from vertical
+  aspect_ratio_threshold: 1.5  # Width/height ratio for horizontal body
+  ground_proximity_threshold: 0.9
+  history_size: 5  # Frames of history to keep
+
+# Bullying/Fight Detection Configuration
+bullying_detection:
+  enabled: true
+  confidence_threshold: 0.5
+  alert_cooldown_seconds: 3
+  group_distance_threshold: 150  # pixels
+  group_min_size: 3  # Minimum people for group cornering
+  rapid_movement_threshold: 50  # pixels per frame
+  aggressive_pose_threshold: 0.6
+  history_window: 30  # frames
+
+# POSH Detection Configuration
+posh_detection:
+  enabled: true
+  confidence_threshold: 0.5
+  alert_cooldown_seconds: 10
+  isolation_distance_threshold: 200  # pixels
+  proximity_threshold: 100  # pixels
+  prolonged_interaction_frames: 150  # ~5 seconds at 30fps
+  leading_trajectory_threshold: 100  # pixels
+
+  # Define restricted/isolated zones (polygons)
+  # Coordinates are in pixels (x, y)
+  zones:
+    - name: "Stairwell Corner"
+      is_restricted: true
+      polygon:
+        - [50, 50]
+        - [150, 50]
+        - [150, 150]
+        - [50, 150]
+
+    - name: "Storage Room Area"
+      is_restricted: true
+      polygon:
+        - [1800, 100]
+        - [1900, 100]
+        - [1900, 300]
+        - [1800, 300]
+
+# Alert management
+alerts:
+  save_to_database: true
+  database_path: "data/alerts.db"
+  save_video_clips: true
+  video_clips_path: "data/video_clips"
+  clip_duration_seconds: 10  # Duration of saved video clips
+  max_alerts_per_minute: 10  # Rate limiting
+
+# Privacy settings
+privacy:
+  blur_faces: false  # Set to true to blur faces in saved clips
+  save_only_pose_skeleton: false  # Set to true to save only pose skeletons
+  retention_days: 30  # How long to keep alert data
+
+# Performance settings
+performance:
+  max_concurrent_cameras: 4
+  use_tensorrt: false  # Enable if running on NVIDIA Jetson with TensorRT
+  use_onnx: false  # Enable for ONNX runtime
+  batch_processing: false  # Batch multiple frames (experimental)
+
+# Dashboard/API settings (optional)
+dashboard:
+  enabled: false
+  host: "0.0.0.0"
+  port: 8080
+  websocket_enabled: true
+  auth_required: true
+  username: "admin"
+  password: "change_me_in_production"

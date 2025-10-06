@@ -1,0 +1,243 @@
+"""WebSocket handler for real-time updates."""
+
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import List, Set
+from loguru import logger
+import json
+import asyncio
+from datetime import datetime
+
+
+class ConnectionManager:
+    """
+    Manages WebSocket connections for real-time updates.
+
+    Handles alert broadcasting and system status updates.
+    """
+
+    def __init__(self):
+        """Initialize connection manager."""
+        self.active_connections: Set[WebSocket] = set()
+        self.alert_queue: asyncio.Queue = asyncio.Queue()
+
+    async def connect(self, websocket: WebSocket):
+        """
+        Accept and register a new WebSocket connection.
+
+        Args:
+            websocket: WebSocket connection
+        """
+        await websocket.accept()
+        self.active_connections.add(websocket)
+        logger.info(f"WebSocket client connected. Total connections: {len(self.active_connections)}")
+
+    def disconnect(self, websocket: WebSocket):
+        """
+        Remove a WebSocket connection.
+
+        Args:
+            websocket: WebSocket connection
+        """
+        self.active_connections.discard(websocket)
+        logger.info(f"WebSocket client disconnected. Total connections: {len(self.active_connections)}")
+
+    async def send_personal_message(self, message: dict, websocket: WebSocket):
+        """
+        Send a message to a specific client.
+
+        Args:
+            message: Message to send
+            websocket: Target WebSocket connection
+        """
+        try:
+            await websocket.send_json(message)
+        except Exception as e:
+            logger.error(f"Error sending personal message: {e}")
+            self.disconnect(websocket)
+
+    async def broadcast(self, message: dict):
+        """
+        Broadcast a message to all connected clients.
+
+        Args:
+            message: Message to broadcast
+        """
+        disconnected = set()
+
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.error(f"Error broadcasting to client: {e}")
+                disconnected.add(connection)
+
+        # Clean up disconnected clients
+        for connection in disconnected:
+            self.disconnect(connection)
+
+    async def broadcast_alert(self, alert: dict):
+        """
+        Broadcast an alert to all connected clients.
+
+        Args:
+            alert: Alert dictionary
+        """
+        message = {
+            "type": "alert",
+            "timestamp": datetime.now().isoformat(),
+            "data": alert
+        }
+
+        await self.broadcast(message)
+
+    async def broadcast_system_status(self, status: dict):
+        """
+        Broadcast system status update.
+
+        Args:
+            status: System status dictionary
+        """
+        message = {
+            "type": "system_status",
+            "timestamp": datetime.now().isoformat(),
+            "data": status
+        }
+
+        await self.broadcast(message)
+
+    async def broadcast_camera_status(self, camera_id: str, status: dict):
+        """
+        Broadcast camera status update.
+
+        Args:
+            camera_id: Camera identifier
+            status: Camera status dictionary
+        """
+        message = {
+            "type": "camera_status",
+            "timestamp": datetime.now().isoformat(),
+            "camera_id": camera_id,
+            "data": status
+        }
+
+        await self.broadcast(message)
+
+    def has_connections(self) -> bool:
+        """
+        Check if there are active connections.
+
+        Returns:
+            True if there are active connections
+        """
+        return len(self.active_connections) > 0
+
+    def get_connection_count(self) -> int:
+        """
+        Get number of active connections.
+
+        Returns:
+            Connection count
+        """
+        return len(self.active_connections)
+
+
+# Global connection manager instance
+manager = ConnectionManager()
+
+
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint handler.
+
+    Args:
+        websocket: WebSocket connection
+    """
+    await manager.connect(websocket)
+
+    try:
+        # Send initial connection confirmation
+        await manager.send_personal_message(
+            {
+                "type": "connection",
+                "status": "connected",
+                "timestamp": datetime.now().isoformat()
+            },
+            websocket
+        )
+
+        # Keep connection alive and handle incoming messages
+        while True:
+            try:
+                # Receive message from client
+                data = await websocket.receive_text()
+                message = json.loads(data)
+
+                # Handle different message types
+                message_type = message.get("type")
+
+                if message_type == "ping":
+                    # Respond to ping
+                    await manager.send_personal_message(
+                        {
+                            "type": "pong",
+                            "timestamp": datetime.now().isoformat()
+                        },
+                        websocket
+                    )
+
+                elif message_type == "subscribe":
+                    # Handle subscription requests
+                    topics = message.get("topics", [])
+                    await manager.send_personal_message(
+                        {
+                            "type": "subscribed",
+                            "topics": topics,
+                            "timestamp": datetime.now().isoformat()
+                        },
+                        websocket
+                    )
+
+                else:
+                    logger.warning(f"Unknown message type: {message_type}")
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON received: {e}")
+                await manager.send_personal_message(
+                    {
+                        "type": "error",
+                        "message": "Invalid JSON format",
+                        "timestamp": datetime.now().isoformat()
+                    },
+                    websocket
+                )
+
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        logger.info("WebSocket client disconnected normally")
+
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        manager.disconnect(websocket)
+
+
+async def start_status_broadcaster(system_instance, interval: int = 5):
+    """
+    Background task to broadcast system status periodically.
+
+    Args:
+        system_instance: Guardian Angel system instance
+        interval: Broadcast interval in seconds
+    """
+    while True:
+        try:
+            if manager.has_connections() and system_instance is not None:
+                # Get system status
+                if hasattr(system_instance, 'get_status'):
+                    status = system_instance.get_status()
+                    await manager.broadcast_system_status(status)
+
+            await asyncio.sleep(interval)
+
+        except Exception as e:
+            logger.error(f"Error in status broadcaster: {e}")
+            await asyncio.sleep(interval)

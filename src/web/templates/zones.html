@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Zone Editor - Guardian Angel{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-geo-alt"></i> Zone Configuration</h1>
+        <p class="text-muted">Draw zones for POSH detection and mark restricted areas</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Zone Editor - Camera: <span id="selectedCamera">Select a camera</span></h5>
+            </div>
+            <div class="card-body">
+                <canvas id="zoneCanvas" width="1280" height="720"></canvas>
+                <div class="mt-3">
+                    <button class="btn btn-primary" onclick="startDrawing()">
+                        <i class="bi bi-pencil"></i> Draw Zone
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearCanvas()">
+                        <i class="bi bi-eraser"></i> Clear
+                    </button>
+                    <button class="btn btn-success" onclick="saveZones()">
+                        <i class="bi bi-save"></i> Save Zones
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Camera Selection</h5>
+            </div>
+            <div class="card-body">
+                <select class="form-select" id="cameraSelect" onchange="selectCamera()">
+                    <option>Loading cameras...</option>
+                </select>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>Defined Zones</h5>
+            </div>
+            <div class="card-body">
+                <div id="zoneList">
+                    <p class="text-muted">No zones defined yet</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Zone drawing implementation would go here
+// This is a simplified placeholder
+
+async function loadCamerasForZones() {
+    try {
+        const cameras = await apiCall('/api/cameras/');
+        const select = document.getElementById('cameraSelect');
+        select.innerHTML = '<option value="">Select a camera</option>';
+
+        cameras.forEach(camera => {
+            select.innerHTML += `<option value="${camera.camera_id}">${camera.name}</option>`;
+        });
+    } catch (error) {
+        console.error('Failed to load cameras:', error);
+    }
+}
+
+function selectCamera() {
+    const cameraId = document.getElementById('cameraSelect').value;
+    document.getElementById('selectedCamera').textContent = cameraId || 'None selected';
+}
+
+function startDrawing() {
+    showToast('Zone drawing feature available in full version', 'info');
+}
+
+function clearCanvas() {
+    const canvas = document.getElementById('zoneCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+async function saveZones() {
+    showToast('Zones saved (demo mode)', 'success');
+}
+
+document.addEventListener('DOMContentLoaded', loadCamerasForZones);
+</script>
+{% endblock %}

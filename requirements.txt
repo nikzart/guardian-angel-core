@@ -1,0 +1,57 @@
+# Core Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+onnx>=1.14.0
+onnxruntime-gpu>=1.15.0  # Use onnxruntime for CPU-only
+
+# Computer Vision
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+ultralytics>=8.0.0  # YOLOv8
+pillow>=10.0.0
+
+# Object Tracking
+filterpy>=1.4.5  # Kalman filtering for tracking
+scikit-learn>=1.3.0
+scipy>=1.11.0
+
+# Video Processing
+av>=10.0.0  # PyAV for advanced video handling
+ffmpeg-python>=0.2.0
+
+# Action Recognition (optional - can use PyTorch Hub)
+# pytorchvideo>=0.1.5  # For X3D/SlowFast models
+
+# Configuration & Utils
+pyyaml>=6.0
+python-dotenv>=1.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Logging & Monitoring
+loguru>=0.7.0
+rich>=13.0.0  # Beautiful terminal output
+
+# Alert & Event Management
+sqlalchemy>=2.0.0  # For alert database
+alembic>=1.11.0  # Database migrations
+
+# API & Dashboard (optional for human-in-the-loop review)
+fastapi>=0.100.0
+uvicorn>=0.23.0
+websockets>=11.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+
+# Development
+black>=23.7.0
+flake8>=6.1.0
+mypy>=1.5.0
+ipython>=8.14.0
+jupyter>=1.0.0
+
+# Edge Deployment
+# tensorrt>=8.6.0  # Uncomment for NVIDIA Jetson with TensorRT

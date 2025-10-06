@@ -1,0 +1,1 @@
+- when pushing a git commit, i (nikzart - pareekshith1000@gmail.com) should always be the solo author and contributor. Do not mention claude.

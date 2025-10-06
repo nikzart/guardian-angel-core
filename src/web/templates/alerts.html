@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Alerts - Guardian Angel{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-bell"></i> Alert Management</h1>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <select class="form-select" id="filterCamera" onchange="loadAlerts()">
+                    <option value="">All Cameras</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" id="filterType" onchange="loadAlerts()">
+                    <option value="">All Types</option>
+                    <option value="fall_detected">Fall Detected</option>
+                    <option value="fight_detected">Fight Detected</option>
+                    <option value="group_cornering">Group Cornering</option>
+                    <option value="posh_violation">POSH Violation</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" id="filterReviewed" onchange="loadAlerts()">
+                    <option value="">All Status</option>
+                    <option value="false">Unreviewed</option>
+                    <option value="true">Reviewed</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <input type="number" class="form-control" id="filterLimit" value="50" placeholder="Limit" onchange="loadAlerts()">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alerts Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table alert-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Camera</th>
+                        <th>Type</th>
+                        <th>Severity</th>
+                        <th>Description</th>
+                        <th>Confidence</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="alertsTableBody">
+                    <tr>
+                        <td colspan="8" class="text-center py-4">
+                            <i class="bi bi-hourglass-split"></i> Loading alerts...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadAlerts() {
+    try {
+        const camera = document.getElementById('filterCamera').value;
+        const type = document.getElementById('filterType').value;
+        const reviewed = document.getElementById('filterReviewed').value;
+        const limit = document.getElementById('filterLimit').value;
+
+        let url = `/api/alerts/?limit=${limit}`;
+        if (camera) url += `&camera_id=${camera}`;
+        if (type) url += `&alert_type=${type}`;
+        if (reviewed) url += `&reviewed=${reviewed}`;
+
+        const alerts = await apiCall(url);
+        const tbody = document.getElementById('alertsTableBody');
+        tbody.innerHTML = '';
+
+        if (alerts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><i class="bi bi-inbox"></i> No alerts found</td></tr>';
+            return;
+        }
+
+        alerts.forEach(alert => {
+            const severityClass = {
+                'low': 'info',
+                'medium': 'warning',
+                'high': 'danger',
+                'critical': 'danger'
+            }[alert.severity] || 'secondary';
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${new Date(alert.timestamp).toLocaleString()}</td>
+                <td>${alert.camera_id}</td>
+                <td><span class="badge bg-secondary">${alert.alert_type.replace('_', ' ')}</span></td>
+                <td><span class="badge bg-${severityClass}">${alert.severity}</span></td>
+                <td>${alert.description}</td>
+                <td>${(alert.confidence * 100).toFixed(0)}%</td>
+                <td>
+                    ${alert.reviewed
+                        ? '<span class="badge bg-success">Reviewed</span>'
+                        : '<span class="badge bg-warning">Pending</span>'}
+                </td>
+                <td>
+                    ${!alert.reviewed
+                        ? `<button class="btn btn-sm btn-primary" onclick="reviewAlert('${alert.alert_id}')">
+                            <i class="bi bi-check"></i> Review
+                          </button>`
+                        : ''}
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+
+    } catch (error) {
+        console.error('Failed to load alerts:', error);
+    }
+}
+
+async function reviewAlert(alertId) {
+    try {
+        await apiCall(`/api/alerts/${alertId}/review`, {
+            method: 'POST',
+            body: JSON.stringify({ notes: 'Reviewed from dashboard' })
+        });
+
+        showToast('Alert marked as reviewed', 'success');
+        loadAlerts();
+    } catch (error) {
+        showToast('Failed to review alert', 'error');
+    }
+}
+
+async function loadCamerasForFilter() {
+    try {
+        const cameras = await apiCall('/api/cameras/');
+        const select = document.getElementById('filterCamera');
+
+        cameras.forEach(camera => {
+            select.innerHTML += `<option value="${camera.camera_id}">${camera.name}</option>`;
+        });
+    } catch (error) {
+        console.error('Failed to load cameras:', error);
+    }
+}
+
+// Listen for real-time alerts
+ws.onAlert((alert) => {
+    loadAlerts();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadCamerasForFilter();
+    loadAlerts();
+    setInterval(loadAlerts, 30000);
+});
+</script>
+{% endblock %}

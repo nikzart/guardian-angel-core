@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - Guardian Angel{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-gear"></i> System Configuration</h1>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-success" onclick="saveConfiguration()">
+            <i class="bi bi-save"></i> Save Configuration
+        </button>
+        <button class="btn btn-secondary" onclick="loadConfiguration()">
+            <i class="bi bi-arrow-clockwise"></i> Reload
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3">
+        <!-- Sidebar Navigation -->
+        <div class="list-group" id="configNav">
+            <a class="list-group-item list-group-item-action active" data-section="system">
+                <i class="bi bi-gear-fill"></i> System Settings
+            </a>
+            <a class="list-group-item list-group-item-action" data-section="tracking">
+                <i class="bi bi-arrows-move"></i> Tracking
+            </a>
+            <a class="list-group-item list-group-item-action" data-section="pose_model">
+                <i class="bi bi-person"></i> Pose Model
+            </a>
+            <a class="list-group-item list-group-item-action" data-section="fall_detection">
+                <i class="bi bi-person-down"></i> Fall Detection
+            </a>
+            <a class="list-group-item list-group-item-action" data-section="bullying_detection">
+                <i class="bi bi-exclamation-triangle"></i> Bullying Detection
+            </a>
+            <a class="list-group-item list-group-item-action" data-section="posh_detection">
+                <i class="bi bi-shield-exclamation"></i> POSH Detection
+            </a>
+            <a class="list-group-item list-group-item-action" data-section="alerts">
+                <i class="bi bi-bell"></i> Alert Settings
+            </a>
+            <a class="list-group-item list-group-item-action" data-section="privacy">
+                <i class="bi bi-lock"></i> Privacy
+            </a>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <!-- Configuration Forms -->
+        <div id="configContent">
+            <!-- System Settings -->
+            <div class="config-section" id="section-system">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>System Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">System Name</label>
+                            <input type="text" class="form-control" id="system_name">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Log Level</label>
+                            <select class="form-select" id="system_log_level">
+                                <option value="DEBUG">DEBUG</option>
+                                <option value="INFO">INFO</option>
+                                <option value="WARNING">WARNING</option>
+                                <option value="ERROR">ERROR</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                            </select>
+                            <small class="form-text text-muted">Controls the verbosity of system logs</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tracking Settings -->
+            <div class="config-section d-none" id="section-tracking">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Tracking Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Max Age (frames)</label>
+                            <input type="number" class="form-control" id="tracking_max_age" min="1" max="100">
+                            <small class="form-text text-muted">Maximum frames to keep track without updates</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Min Hits</label>
+                            <input type="number" class="form-control" id="tracking_min_hits" min="1" max="10">
+                            <small class="form-text text-muted">Minimum hits to confirm a track</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">IOU Threshold</label>
+                            <input type="range" class="form-range" id="tracking_iou_threshold" min="0" max="1" step="0.05">
+                            <div class="d-flex justify-content-between">
+                                <small>0.0</small>
+                                <small id="tracking_iou_value">0.5</small>
+                                <small>1.0</small>
+                            </div>
+                            <small class="form-text text-muted">IOU threshold for matching detections to tracks</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pose Model Settings -->
+            <div class="config-section d-none" id="section-pose_model">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Pose Model Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Model Path</label>
+                            <input type="text" class="form-control" id="pose_model_model_path">
+                            <small class="form-text text-muted">Path to YOLOv8-pose model weights</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Device</label>
+                            <select class="form-select" id="pose_model_device">
+                                <option value="cuda">CUDA (GPU)</option>
+                                <option value="cpu">CPU</option>
+                                <option value="mps">MPS (Apple Silicon)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confidence Threshold</label>
+                            <input type="range" class="form-range" id="pose_model_conf_threshold" min="0" max="1" step="0.05">
+                            <div class="d-flex justify-content-between">
+                                <small>0.0</small>
+                                <small id="pose_model_conf_value">0.5</small>
+                                <small>1.0</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fall Detection Settings -->
+            <div class="config-section d-none" id="section-fall_detection">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Fall Detection Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="fall_detection_enabled">
+                                <label class="form-check-label">Enable Fall Detection</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confidence Threshold</label>
+                            <input type="range" class="form-range" id="fall_detection_confidence_threshold" min="0" max="1" step="0.05">
+                            <div class="d-flex justify-content-between">
+                                <small>0.0</small>
+                                <small id="fall_detection_conf_value">0.6</small>
+                                <small>1.0</small>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Alert Cooldown (seconds)</label>
+                            <input type="number" class="form-control" id="fall_detection_alert_cooldown_seconds" min="1" max="60">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Vertical Threshold</label>
+                            <input type="range" class="form-range" id="fall_detection_vertical_threshold" min="0" max="1" step="0.05">
+                            <div class="d-flex justify-content-between">
+                                <small>0.0</small>
+                                <small id="fall_detection_vert_value">0.6</small>
+                                <small>1.0</small>
+                            </div>
+                            <small class="form-text text-muted">How low head must be in frame (0-1)</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Angle Threshold (degrees)</label>
+                            <input type="number" class="form-control" id="fall_detection_angle_threshold" min="0" max="90">
+                            <small class="form-text text-muted">Body angle from vertical</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bullying Detection Settings -->
+            <div class="config-section d-none" id="section-bullying_detection">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Bullying Detection Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="bullying_detection_enabled">
+                                <label class="form-check-label">Enable Bullying Detection</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confidence Threshold</label>
+                            <input type="range" class="form-range" id="bullying_detection_confidence_threshold" min="0" max="1" step="0.05">
+                            <div class="d-flex justify-content-between">
+                                <small>0.0</small>
+                                <small id="bullying_detection_conf_value">0.5</small>
+                                <small>1.0</small>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Group Distance Threshold (pixels)</label>
+                            <input type="number" class="form-control" id="bullying_detection_group_distance_threshold" min="50" max="500">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Group Minimum Size</label>
+                            <input type="number" class="form-control" id="bullying_detection_group_min_size" min="2" max="10">
+                            <small class="form-text text-muted">Minimum people for group cornering detection</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Rapid Movement Threshold (pixels/frame)</label>
+                            <input type="number" class="form-control" id="bullying_detection_rapid_movement_threshold" min="10" max="200">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- POSH Detection Settings -->
+            <div class="config-section d-none" id="section-posh_detection">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>POSH Detection Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="posh_detection_enabled">
+                                <label class="form-check-label">Enable POSH Detection</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confidence Threshold</label>
+                            <input type="range" class="form-range" id="posh_detection_confidence_threshold" min="0" max="1" step="0.05">
+                            <div class="d-flex justify-content-between">
+                                <small>0.0</small>
+                                <small id="posh_detection_conf_value">0.5</small>
+                                <small>1.0</small>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Isolation Distance Threshold (pixels)</label>
+                            <input type="number" class="form-control" id="posh_detection_isolation_distance_threshold" min="50" max="500">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Proximity Threshold (pixels)</label>
+                            <input type="number" class="form-control" id="posh_detection_proximity_threshold" min="50" max="300">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Prolonged Interaction (frames)</label>
+                            <input type="number" class="form-control" id="posh_detection_prolonged_interaction_frames" min="30" max="600">
+                            <small class="form-text text-muted">Number of frames (~5 seconds at 30 FPS = 150 frames)</small>
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            Zone configuration is available in the <a href="/zones">Zones</a> page.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alert Settings -->
+            <div class="config-section d-none" id="section-alerts">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Alert Management Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="alerts_save_to_database">
+                                <label class="form-check-label">Save Alerts to Database</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="alerts_save_video_clips">
+                                <label class="form-check-label">Save Video Clips</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Clip Duration (seconds)</label>
+                            <input type="number" class="form-control" id="alerts_clip_duration_seconds" min="1" max="60">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Max Alerts Per Minute</label>
+                            <input type="number" class="form-control" id="alerts_max_alerts_per_minute" min="1" max="100">
+                            <small class="form-text text-muted">Rate limiting to prevent alert flooding</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Privacy Settings -->
+            <div class="config-section d-none" id="section-privacy">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Privacy Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="privacy_blur_faces">
+                                <label class="form-check-label">Blur Faces in Saved Clips</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="privacy_save_only_pose_skeleton">
+                                <label class="form-check-label">Save Only Pose Skeletons</label>
+                            </div>
+                            <small class="form-text text-muted">Maximum privacy mode - saves only stick figures</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Retention Days</label>
+                            <input type="number" class="form-control" id="privacy_retention_days" min="1" max="365">
+                            <small class="form-text text-muted">How long to keep alert data</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/config.js"></script>
+{% endblock %}

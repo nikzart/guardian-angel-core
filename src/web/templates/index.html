@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Guardian Angel{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-speedometer2"></i> System Dashboard</h1>
+    </div>
+    <div class="col-auto">
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-success" id="btnStart" onclick="controlSystem('start')">
+                <i class="bi bi-play-fill"></i> Start
+            </button>
+            <button type="button" class="btn btn-warning" id="btnStop" onclick="controlSystem('stop')">
+                <i class="bi bi-stop-fill"></i> Stop
+            </button>
+            <button type="button" class="btn btn-info" id="btnRestart" onclick="controlSystem('restart')">
+                <i class="bi bi-arrow-clockwise"></i> Restart
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- System Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Total Cameras</h6>
+                        <h2 class="mb-0" id="totalCameras">0</h2>
+                    </div>
+                    <i class="bi bi-camera-video" style="font-size: 3rem; opacity: 0.5;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Active Cameras</h6>
+                        <h2 class="mb-0" id="activeCameras">0</h2>
+                    </div>
+                    <i class="bi bi-check-circle" style="font-size: 3rem; opacity: 0.5;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Alerts (24h)</h6>
+                        <h2 class="mb-0" id="alertCount24h">0</h2>
+                    </div>
+                    <i class="bi bi-bell" style="font-size: 3rem; opacity: 0.5;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">CPU Usage</h6>
+                        <h2 class="mb-0"><span id="cpuUsage">0</span>%</h2>
+                    </div>
+                    <i class="bi bi-cpu" style="font-size: 3rem; opacity: 0.5;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cameras and Alerts Row -->
+<div class="row">
+    <!-- Camera Status -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-camera-video"></i> Camera Status</h5>
+            </div>
+            <div class="card-body">
+                <div id="cameraStatus" class="list-group">
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-hourglass-split"></i> Loading...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Alerts -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-bell"></i> Recent Alerts</h5>
+                <a href="/alerts" class="btn btn-sm btn-primary">View All</a>
+            </div>
+            <div class="card-body">
+                <div id="recentAlerts" class="list-group">
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-inbox"></i> No recent alerts
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Charts -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Alerts by Type (Last 7 Days)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="alertsByTypeChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Alerts by Severity (Last 7 Days)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="alertsBySeverityChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let alertsByTypeChart = null;
+let alertsBySeverityChart = null;
+
+// Initialize dashboard
+async function initDashboard() {
+    await loadSystemStatus();
+    await loadCameraStatus();
+    await loadRecentAlerts();
+    await loadAlertStatistics();
+
+    // Refresh data periodically
+    setInterval(loadSystemStatus, 5000);
+    setInterval(loadCameraStatus, 10000);
+    setInterval(loadRecentAlerts, 15000);
+}
+
+// Load system status
+async function loadSystemStatus() {
+    try {
+        const status = await apiCall('/api/system/status');
+
+        document.getElementById('cpuUsage').textContent = status.cpu_percent.toFixed(1);
+
+        const cameras = Object.keys(status.cameras).length;
+        const active = Object.values(status.cameras).filter(c => c.is_running).length;
+
+        document.getElementById('totalCameras').textContent = cameras;
+        document.getElementById('activeCameras').textContent = active;
+
+    } catch (error) {
+        console.error('Failed to load system status:', error);
+    }
+}
+
+// Load camera status
+async function loadCameraStatus() {
+    try {
+        const cameras = await apiCall('/api/cameras/status');
+
+        const container = document.getElementById('cameraStatus');
+        container.innerHTML = '';
+
+        cameras.forEach(camera => {
+            const statusIcon = camera.is_running
+                ? '<i class="bi bi-circle-fill text-success"></i>'
+                : '<i class="bi bi-circle-fill text-danger"></i>';
+
+            const item = document.createElement('div');
+            item.className = 'list-group-item';
+            item.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        ${statusIcon}
+                        <strong>${camera.camera_id}</strong>
+                        <small class="text-muted ms-2">${camera.frame_count} frames</small>
+                    </div>
+                    <div class="text-end">
+                        <small class="text-muted">FPS: ${camera.fps}</small>
+                    </div>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+
+    } catch (error) {
+        console.error('Failed to load camera status:', error);
+    }
+}
+
+// Load recent alerts
+async function loadRecentAlerts() {
+    try {
+        const alerts = await apiCall('/api/alerts/?limit=5');
+
+        const container = document.getElementById('recentAlerts');
+        container.innerHTML = '';
+
+        // Update 24h count
+        const alerts24h = await apiCall('/api/alerts/recent/count?minutes=1440');
+        document.getElementById('alertCount24h').textContent = alerts24h.total;
+
+        if (alerts.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-inbox"></i> No recent alerts</div>';
+            return;
+        }
+
+        alerts.forEach(alert => {
+            const severityClass = {
+                'low': 'info',
+                'medium': 'warning',
+                'high': 'danger',
+                'critical': 'danger'
+            }[alert.severity] || 'secondary';
+
+            const item = document.createElement('div');
+            item.className = 'list-group-item';
+            item.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge bg-${severityClass}">${alert.severity}</span>
+                        <strong class="ms-2">${alert.alert_type.replace('_', ' ')}</strong>
+                        <small class="text-muted d-block">${alert.camera_id} - ${new Date(alert.timestamp).toLocaleString()}</small>
+                    </div>
+                    <div>
+                        <small class="text-muted">${(alert.confidence * 100).toFixed(0)}%</small>
+                    </div>
+                </div>
+                <small class="text-muted">${alert.description}</small>
+            `;
+            container.appendChild(item);
+        });
+
+    } catch (error) {
+        console.error('Failed to load recent alerts:', error);
+    }
+}
+
+// Load alert statistics
+async function loadAlertStatistics() {
+    try {
+        const stats = await apiCall('/api/alerts/statistics/summary?days=7');
+
+        // Alerts by type chart
+        const typeCtx = document.getElementById('alertsByTypeChart').getContext('2d');
+
+        if (alertsByTypeChart) {
+            alertsByTypeChart.destroy();
+        }
+
+        alertsByTypeChart = new Chart(typeCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(stats.alerts_by_type),
+                datasets: [{
+                    label: 'Alerts',
+                    data: Object.values(stats.alerts_by_type),
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+
+        // Alerts by severity chart
+        const severityCtx = document.getElementById('alertsBySeverityChart').getContext('2d');
+
+        if (alertsBySeverityChart) {
+            alertsBySeverityChart.destroy();
+        }
+
+        const severityColors = {
+            'low': 'rgba(52, 211, 153, 0.5)',
+            'medium': 'rgba(251, 191, 36, 0.5)',
+            'high': 'rgba(239, 68, 68, 0.5)',
+            'critical': 'rgba(185, 28, 28, 0.5)'
+        };
+
+        alertsBySeverityChart = new Chart(severityCtx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(stats.alerts_by_severity),
+                datasets: [{
+                    data: Object.values(stats.alerts_by_severity),
+                    backgroundColor: Object.keys(stats.alerts_by_severity).map(s => severityColors[s] || 'rgba(156, 163, 175, 0.5)')
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true
+            }
+        });
+
+    } catch (error) {
+        console.error('Failed to load alert statistics:', error);
+    }
+}
+
+// Control system (start/stop/restart)
+async function controlSystem(action) {
+    try {
+        const result = await apiCall(`/api/system/${action}`, { method: 'POST' });
+        showToast(result.message, 'success');
+        setTimeout(loadSystemStatus, 2000);
+    } catch (error) {
+        showToast(`Failed to ${action} system`, 'error');
+    }
+}
+
+// Listen for real-time alerts
+ws.onAlert((alert) => {
+    showToast(`New Alert: ${alert.alert_type} - ${alert.camera_id}`, 'warning');
+    loadRecentAlerts();
+    loadAlertStatistics();
+});
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', initDashboard);
+</script>
+{% endblock %}
