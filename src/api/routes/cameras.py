@@ -4,12 +4,14 @@ import cv2
 import numpy as np
 from fastapi import APIRouter, HTTPException, Depends, Response
 from fastapi.responses import StreamingResponse
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Generator
 from pydantic import BaseModel
 from loguru import logger
 import io
+import time
 
 from ..auth import get_current_user
+from ...utils.types import Detection, Pose
 
 
 router = APIRouter(prefix="/api/cameras", tags=["cameras"])
@@ -444,3 +446,159 @@ async def get_camera_preview(
     except Exception as e:
         logger.error(f"Error getting camera preview: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def draw_detections_on_frame(frame: np.ndarray, detections: List[Detection]) -> np.ndarray:
+    """
+    Draw detection overlays on frame.
+
+    Args:
+        frame: Input frame (BGR)
+        detections: List of detections with poses
+
+    Returns:
+        Frame with detection overlays
+    """
+    annotated = frame.copy()
+
+    # COCO pose skeleton connections
+    skeleton = [
+        (0, 1), (0, 2), (1, 3), (2, 4),  # Head
+        (5, 6), (5, 7), (7, 9), (6, 8), (8, 10),  # Arms
+        (5, 11), (6, 12), (11, 12),  # Torso
+        (11, 13), (13, 15), (12, 14), (14, 16)  # Legs
+    ]
+
+    for detection in detections:
+        # Draw bounding box
+        x1, y1, x2, y2 = int(detection.bbox.x1), int(detection.bbox.y1), int(detection.bbox.x2), int(detection.bbox.y2)
+
+        # Color based on track_id (if available)
+        color = (0, 255, 0)  # Green by default
+        if detection.track_id is not None:
+            # Generate color from track_id
+            np.random.seed(detection.track_id)
+            color = tuple(map(int, np.random.randint(50, 255, 3)))
+
+        # Draw bbox
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+
+        # Draw label
+        label = f"Person {detection.track_id if detection.track_id else '?'}"
+        label += f" {detection.confidence:.2f}"
+
+        (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        cv2.rectangle(annotated, (x1, y1 - label_h - 10), (x1 + label_w, y1), color, -1)
+        cv2.putText(annotated, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+        # Draw pose keypoints and skeleton
+        if detection.pose is not None:
+            keypoints = detection.pose.keypoints
+
+            # Draw skeleton connections
+            for start_idx, end_idx in skeleton:
+                if start_idx < len(keypoints) and end_idx < len(keypoints):
+                    start_kp = keypoints[start_idx]
+                    end_kp = keypoints[end_idx]
+
+                    # Check confidence
+                    if start_kp[2] > 0.5 and end_kp[2] > 0.5:
+                        start_point = (int(start_kp[0]), int(start_kp[1]))
+                        end_point = (int(end_kp[0]), int(end_kp[1]))
+                        cv2.line(annotated, start_point, end_point, (255, 0, 0), 2)
+
+            # Draw keypoints
+            for kp in keypoints:
+                if kp[2] > 0.5:  # Confidence threshold
+                    center = (int(kp[0]), int(kp[1]))
+                    cv2.circle(annotated, center, 3, (0, 0, 255), -1)
+
+    # Add stats overlay
+    person_count = len(detections)
+    cv2.putText(annotated, f"Persons: {person_count}", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    cv2.putText(annotated, f"Persons: {person_count}", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 1)
+
+    return annotated
+
+
+def generate_stream(camera_id: str) -> Generator[bytes, None, None]:
+    """
+    Generate MJPEG stream with detection overlays.
+
+    Args:
+        camera_id: Camera identifier
+
+    Yields:
+        JPEG frames in MJPEG format
+    """
+    if system_instance is None:
+        logger.error("System not initialized")
+        return
+
+    # Get camera stream
+    if not hasattr(system_instance, 'camera_streams') or camera_id not in system_instance.camera_streams:
+        logger.error(f"Camera '{camera_id}' not running")
+        return
+
+    stream = system_instance.camera_streams[camera_id]
+
+    logger.info(f"Starting live stream for camera {camera_id}")
+
+    try:
+        while True:
+            # Read frame
+            frame_obj = stream.read(timeout=2.0)
+
+            if frame_obj is None:
+                time.sleep(0.1)
+                continue
+
+            # Draw detections
+            annotated_frame = draw_detections_on_frame(frame_obj.image, frame_obj.detections)
+
+            # Encode as JPEG
+            ret, buffer = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+
+            if not ret:
+                continue
+
+            # Yield frame in MJPEG format
+            frame_bytes = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+            time.sleep(0.03)  # ~30 FPS max
+
+    except GeneratorExit:
+        logger.info(f"Stream closed for camera {camera_id}")
+    except Exception as e:
+        logger.error(f"Error in stream generation: {e}")
+
+
+@router.get("/{camera_id}/stream")
+async def stream_camera(
+    camera_id: str,
+    user: str = Depends(get_current_user)
+):
+    """
+    Stream camera feed with detection overlays (MJPEG).
+
+    Args:
+        camera_id: Camera identifier
+
+    Returns:
+        MJPEG stream
+    """
+    if system_instance is None:
+        raise HTTPException(status_code=500, detail="System not initialized")
+
+    # Check if camera exists and is running
+    if not hasattr(system_instance, 'camera_streams') or camera_id not in system_instance.camera_streams:
+        raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not running")
+
+    return StreamingResponse(
+        generate_stream(camera_id),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )

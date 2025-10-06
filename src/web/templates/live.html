@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}Live View - Guardian Angel{% endblock %}
+
+{% block extra_css %}
+<style>
+.live-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.camera-stream-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.stream-container {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%; /* 16:9 aspect ratio */
+    background: #000;
+    overflow: hidden;
+}
+
+.stream-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.stream-header {
+    padding: 15px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.stream-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.stream-status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    margin-left: 10px;
+}
+
+.stream-status.live {
+    background: #28a745;
+    color: white;
+}
+
+.stream-status.offline {
+    background: #dc3545;
+    color: white;
+}
+
+.stream-info {
+    padding: 10px 15px;
+    background: #f8f9fa;
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.fullscreen-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.fullscreen-btn:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.no-cameras {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6c757d;
+}
+
+.no-cameras i {
+    font-size: 4rem;
+    margin-bottom: 20px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-broadcast"></i> Live Camera View</h1>
+        <p class="text-muted">Real-time camera feeds with detection overlays</p>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-secondary" onclick="refreshStreams()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<div id="liveGrid" class="live-grid">
+    <div class="text-center py-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-3 text-muted">Loading camera streams...</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let activeCameras = [];
+
+async function loadLiveStreams() {
+    try {
+        const cameras = await apiCall('/api/cameras/');
+        const grid = document.getElementById('liveGrid');
+
+        if (cameras.length === 0) {
+            grid.innerHTML = `
+                <div class="no-cameras">
+                    <i class="bi bi-camera-video-off"></i>
+                    <h4>No Cameras Available</h4>
+                    <p>Add cameras in the <a href="/cameras">Camera Management</a> page</p>
+                </div>
+            `;
+            return;
+        }
+
+        grid.innerHTML = '';
+        activeCameras = [];
+
+        for (const camera of cameras) {
+            try {
+                const status = await apiCall(`/api/cameras/${camera.camera_id}/status`);
+
+                const card = document.createElement('div');
+                card.className = 'camera-stream-card';
+                card.id = `camera-${camera.camera_id}`;
+
+                const isRunning = status.is_running;
+                activeCameras.push({ id: camera.camera_id, running: isRunning });
+
+                card.innerHTML = `
+                    <div class="stream-header">
+                        <h5 class="stream-title">
+                            ${camera.name}
+                            <span class="stream-status ${isRunning ? 'live' : 'offline'}">
+                                ${isRunning ? 'LIVE' : 'OFFLINE'}
+                            </span>
+                        </h5>
+                    </div>
+                    <div class="stream-container">
+                        ${isRunning ? `
+                            <button class="fullscreen-btn" onclick="toggleFullscreen('stream-${camera.camera_id}')">
+                                <i class="bi bi-fullscreen"></i>
+                            </button>
+                            <img id="stream-${camera.camera_id}"
+                                 class="stream-img"
+                                 src="/api/cameras/${camera.camera_id}/stream"
+                                 alt="${camera.name}">
+                        ` : `
+                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: white;">
+                                <i class="bi bi-camera-video-off" style="font-size: 3rem;"></i>
+                                <p>Camera Offline</p>
+                            </div>
+                        `}
+                    </div>
+                    <div class="stream-info">
+                        <i class="bi bi-info-circle"></i> ${camera.camera_id}
+                        ${isRunning ? ` | ${status.frame_count} frames processed` : ''}
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            } catch (error) {
+                console.error(`Failed to load camera ${camera.camera_id}:`, error);
+            }
+        }
+
+    } catch (error) {
+        console.error('Failed to load live streams:', error);
+        document.getElementById('liveGrid').innerHTML = `
+            <div class="no-cameras">
+                <i class="bi bi-exclamation-triangle"></i>
+                <h4>Failed to Load Cameras</h4>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function toggleFullscreen(elementId) {
+    const elem = document.getElementById(elementId);
+
+    if (!document.fullscreenElement) {
+        if (elem.requestFullscreen) {
+            elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+            elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+            elem.msRequestFullscreen();
+        }
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        }
+    }
+}
+
+function refreshStreams() {
+    // Reload all stream images
+    activeCameras.forEach(camera => {
+        if (camera.running) {
+            const img = document.getElementById(`stream-${camera.id}`);
+            if (img) {
+                const src = img.src;
+                img.src = '';
+                setTimeout(() => { img.src = src; }, 100);
+            }
+        }
+    });
+
+    showToast('Streams refreshed', 'success');
+}
+
+// Error handling for streams
+document.addEventListener('error', function(e) {
+    if (e.target.tagName === 'IMG' && e.target.classList.contains('stream-img')) {
+        console.error('Stream error for', e.target.id);
+        // Optionally show error overlay
+    }
+}, true);
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadLiveStreams();
+
+    // Periodically refresh camera status (not the streams themselves)
+    setInterval(() => {
+        // Could update status badges without reloading streams
+    }, 10000);
+});
+</script>
+{% endblock %}

@@ -110,6 +110,11 @@ def create_app(config_manager, system_instance, dashboard_config: dict):
         """Alert review page."""
         return templates.TemplateResponse("alerts.html", {"request": request})
 
+    @app.get("/live", response_class=HTMLResponse)
+    async def live_view_page(request: Request):
+        """Live camera view page."""
+        return templates.TemplateResponse("live.html", {"request": request})
+
     # Startup event
     @app.on_event("startup")
     async def startup_event():
