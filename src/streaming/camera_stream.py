@@ -112,22 +112,26 @@ class CameraStream:
     def _reader_thread(self):
         """Background thread that continuously reads frames from the source."""
         consecutive_failures = 0
-        max_failures = 10
+        max_failures = 100  # Increased from 10 for better resilience
 
         while not self.stopped.is_set():
             try:
                 if self.capture is None or not self.capture.isOpened():
-                    logger.warning(f"Connection lost for {self.camera_id}, reconnecting...")
+                    logger.warning(f"Connection lost for {self.camera_id}, reconnecting (attempt {consecutive_failures + 1})...")
                     if self._connect():
+                        logger.success(f"Reconnected to {self.camera_id} after {consecutive_failures} failures")
                         consecutive_failures = 0
                     else:
                         consecutive_failures += 1
                         if consecutive_failures >= max_failures:
                             logger.error(
-                                f"Max reconnection attempts reached for {self.camera_id}"
+                                f"Max reconnection attempts ({max_failures}) reached for {self.camera_id}"
                             )
                             break
-                        time.sleep(self.reconnect_delay)
+                        # Exponential backoff with max of 60 seconds
+                        backoff_delay = min(self.reconnect_delay * (2 ** min(consecutive_failures // 5, 4)), 60)
+                        logger.info(f"Waiting {backoff_delay:.1f}s before next reconnection attempt")
+                        time.sleep(backoff_delay)
                         continue
 
                 ret, frame = self.capture.read()

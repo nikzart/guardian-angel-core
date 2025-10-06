@@ -146,7 +146,7 @@ async def get_cameras_status(user: str = Depends(get_current_user)):
 @router.post("/restart", response_model=Dict[str, str])
 async def restart_system(user: str = Depends(get_current_user)):
     """
-    Restart the system (stop and start).
+    Restart the system (stop and reinitialize all components).
 
     Returns:
         Success message
@@ -157,17 +157,26 @@ async def restart_system(user: str = Depends(get_current_user)):
     try:
         logger.warning(f"System restart requested by {user}")
 
-        # Stop system
+        # Stop system completely
         if hasattr(system_instance, 'stop'):
             system_instance.stop()
 
         # Reload config
         if config_manager is not None:
             config_manager.reload()
+            system_instance.config = config_manager.to_dict()
 
-        # Start system
+        # Reinitialize cameras
+        system_instance._init_cameras()
+
+        # Reinitialize detectors
+        system_instance._init_detectors()
+
+        # Start system with fresh components
         if hasattr(system_instance, 'start'):
             system_instance.start()
+
+        logger.success("System restarted successfully with reinitialized components")
 
         return {
             "status": "success",
