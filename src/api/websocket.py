@@ -1,11 +1,12 @@
 """WebSocket handler for real-time updates."""
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect, status
 from typing import List, Set
 from loguru import logger
 import json
 import asyncio
 from datetime import datetime
+import base64
 
 
 class ConnectionManager:
@@ -145,14 +146,63 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, auth_manager=None):
     """
     WebSocket endpoint handler.
 
     Args:
         websocket: WebSocket connection
+        auth_manager: Authentication manager (optional)
     """
-    await manager.connect(websocket)
+    # Must accept the connection BEFORE any other operations
+    await websocket.accept()
+
+    # Authenticate if auth is required
+    if auth_manager and auth_manager.auth_required:
+        authenticated = False
+
+        # Check Authorization header (for Basic Auth)
+        auth_header = websocket.headers.get("authorization")
+        if auth_header and auth_header.startswith("Basic "):
+            try:
+                credentials = base64.b64decode(auth_header.split(" ")[1]).decode("utf-8")
+                username, password = credentials.split(":", 1)
+
+                if username == auth_manager.username and password == auth_manager.password:
+                    authenticated = True
+            except Exception as e:
+                logger.warning(f"Failed to parse WebSocket auth header: {e}")
+
+        # Check query parameters as fallback
+        if not authenticated:
+            query_params = dict(websocket.query_params)
+            username = query_params.get("username")
+            password = query_params.get("password")
+
+            # DEBUG LOGGING
+            logger.info(f"WebSocket auth attempt - Received: username='{username}', password='{password}'")
+            logger.info(f"WebSocket auth attempt - Expected: username='{auth_manager.username}', password='{auth_manager.password}'")
+            logger.info(f"WebSocket auth attempt - Username match: {username == auth_manager.username}")
+            logger.info(f"WebSocket auth attempt - Password match: {password == auth_manager.password}")
+
+            if username == auth_manager.username and password == auth_manager.password:
+                authenticated = True
+                logger.info("WebSocket authentication successful via query params")
+
+        if not authenticated:
+            logger.warning(f"WebSocket connection rejected: authentication failed (authenticated={authenticated})")
+            # Send error message before closing
+            await websocket.send_json({
+                "type": "error",
+                "message": "Authentication failed",
+                "timestamp": datetime.now().isoformat()
+            })
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+    # Register the connection manually (don't call manager.connect as it calls accept again)
+    manager.active_connections.add(websocket)
+    logger.info(f"WebSocket client connected. Total connections: {len(manager.active_connections)}")
 
     try:
         # Send initial connection confirmation

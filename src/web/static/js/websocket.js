@@ -20,9 +20,15 @@ class GuardianWebSocket {
 
     connect() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
 
-        console.log('Connecting to WebSocket:', wsUrl);
+        // Get auth credentials from sessionStorage (set during login)
+        const username = sessionStorage.getItem('guardian_username') || 'admin';
+        const password = sessionStorage.getItem('guardian_password') || 'change_me_in_production';
+
+        // Add credentials as query parameters for WebSocket authentication
+        const wsUrl = `${protocol}//${window.location.host}/ws?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+
+        console.log('Connecting to WebSocket...');
 
         this.ws = new WebSocket(wsUrl);
 

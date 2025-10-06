@@ -178,7 +178,7 @@ async function loadSystemStatus() {
 // Load camera status
 async function loadCameraStatus() {
     try {
-        const cameras = await apiCall('/api/cameras/status');
+        const cameras = await apiCall('/api/system/cameras/status');
 
         const container = document.getElementById('cameraStatus');
         container.innerHTML = '';
@@ -341,14 +341,18 @@ async function controlSystem(action) {
     }
 }
 
-// Listen for real-time alerts
-ws.onAlert((alert) => {
-    showToast(`New Alert: ${alert.alert_type} - ${alert.camera_id}`, 'warning');
-    loadRecentAlerts();
-    loadAlertStatistics();
-});
-
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', initDashboard);
+document.addEventListener('DOMContentLoaded', () => {
+    initDashboard();
+
+    // Listen for real-time alerts (ws is defined in base.html)
+    if (typeof ws !== 'undefined') {
+        ws.onAlert((alert) => {
+            showToast(`New Alert: ${alert.alert_type} - ${alert.camera_id}`, 'warning');
+            loadRecentAlerts();
+            loadAlertStatistics();
+        });
+    }
+});
 </script>
 {% endblock %}

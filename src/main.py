@@ -9,12 +9,12 @@ from typing import List, Dict, Optional
 from loguru import logger
 import uvicorn
 
-from streaming import CameraStream
-from tracking import ObjectTracker
-from detectors import FallDetector, BullyingDetector, POSHDetector
-from postprocessing import AlertManager
-from utils.types import Frame
-from utils.config_manager import ConfigManager
+from .streaming import CameraStream
+from .tracking import ObjectTracker
+from .detectors import FallDetector, BullyingDetector, POSHDetector
+from .postprocessing import AlertManager
+from .utils.types import Frame
+from .utils.config_manager import ConfigManager
 
 
 class GuardianAngelSystem:
@@ -209,9 +209,9 @@ class GuardianAngelSystem:
         """Start the system."""
         logger.info("Starting Guardian Angel system...")
 
-        # Start API server if enabled
+        # Start API server if enabled (only if not already running)
         dashboard_config = self.config.get("dashboard", {})
-        if dashboard_config.get("enabled", False):
+        if dashboard_config.get("enabled", False) and self.api_server is None:
             self._start_api_server(dashboard_config)
 
         # Start camera streams
@@ -238,7 +238,7 @@ class GuardianAngelSystem:
     def _start_api_server(self, dashboard_config: dict):
         """Start the FastAPI dashboard server."""
         try:
-            from api.app import create_app
+            from .api.app import create_app
 
             # Create FastAPI app
             self.api_app = create_app(

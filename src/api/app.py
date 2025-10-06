@@ -1,6 +1,6 @@
 """Main FastAPI application for Guardian Angel web dashboard."""
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -80,9 +80,9 @@ def create_app(config_manager, system_instance, dashboard_config: dict):
 
     # WebSocket endpoint
     @app.websocket("/ws")
-    async def websocket_route(websocket):
+    async def websocket_route(websocket: WebSocket):
         """WebSocket endpoint for real-time updates."""
-        await websocket_endpoint(websocket)
+        await websocket_endpoint(websocket, auth_module.auth_manager)
 
     # Web UI routes
     @app.get("/", response_class=HTMLResponse)
