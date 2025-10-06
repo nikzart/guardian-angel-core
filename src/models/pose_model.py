@@ -114,7 +114,8 @@ class PoseEstimationModel:
 
                     # Extract keypoints (17 keypoints for COCO format)
                     # Format: (x, y, confidence) for each keypoint
-                    kpts_array = kpts.data[0].cpu().numpy()  # Shape: (17, 3)
+                    # Take only first 3 columns to handle both (x,y,conf) and (x,y,conf,visible) formats
+                    kpts_array = kpts.data[0].cpu().numpy()[:, :3]  # Shape: (17, 3)
 
                     pose = Pose(keypoints=kpts_array, bbox=bbox)
 
